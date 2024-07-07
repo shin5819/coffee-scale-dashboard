@@ -6,6 +6,7 @@
 import dash
 from dash import html, dcc, Input, Output
 import dash_bootstrap_components as dbc
+import plotly.express as px
 import paho.mqtt.client as mqtt
 import pandas as pd
 import json
@@ -18,7 +19,7 @@ global current_weight
 current_weight = 0.0
 
 global df
-df_weight = pd.DataFrame({'weight':[current_weight]}, index=[current_time])
+df_weight = pd.DataFrame({'timedelta':[dt.timedelta(0)], 'timedelta_sec':[0.0], 'weight':[current_weight]}, index=[current_time])
 
 def strfdelta(tdelta, fmt):
     d = {"days": tdelta.days}
@@ -50,7 +51,7 @@ def on_message(client, userdata, msg):
     current_weight = message['weight']
 
     global df_weight
-    df_weight.loc[current_time] = current_weight
+    df_weight.loc[current_time] = [current_time, current_time.total_seconds(), current_weight]
 
 mqttc.on_connect = on_connect
 mqttc.on_message = on_message
@@ -69,6 +70,10 @@ card = dbc.Card(
     html.H4(id="weight")
 )
 
+card_graph = dbc.Card(
+    dcc.Graph(id="graph")
+)
+
 # -----------------------------------------------------------------------------
 # Application layout
 # -----------------------------------------------------------------------------
@@ -78,7 +83,8 @@ app.layout = dbc.Container(
         dcc.Interval(id='update', n_intervals=0, interval=200),
         html.H1("Coffee Scale Monitor with Plotly Dash"),
         html.Hr(),
-        dbc.Row(dbc.Col(card, lg=4))
+        dbc.Row(dbc.Col(card, lg=4)),
+        dbc.Row(dbc.Col(card_graph))
     ]
 )
 
@@ -89,11 +95,17 @@ app.layout = dbc.Container(
     Output('weight', 'children'),
     Input('update', 'n_intervals')
 )
-
 def update_weight(timer):
     time = strfdelta(current_time, "{minutes}:{seconds:0>2}.{milliseconds:0>3}")
     return ("Time: " +  time + ", Weight: " + str(current_weight))
 
+@app.callback(
+    Output('graph', 'figure'),
+    Input('update', 'n_intervals')
+)
+def update_graph(timer):
+    fig = px.area(df_weight, x='timedelta_sec', y='weight')
+    return fig
 
 # -----------------------------------------------------------------------------
 # Main function
