@@ -7,9 +7,26 @@ import dash
 from dash import html, dcc, Input, Output
 import dash_bootstrap_components as dbc
 import paho.mqtt.client as mqtt
+import pandas as pd
+import json
+import datetime as dt
 
-global current_temperature
-current_temperature = "NaN"
+global current_time
+current_time = dt.timedelta(0)
+
+global current_weight
+current_weight = 0.0
+
+global df
+df_weight = pd.DataFrame({'weight':[current_weight]}, index=[current_time])
+
+def strfdelta(tdelta, fmt):
+    d = {"days": tdelta.days}
+    d["hours"], rem = divmod(tdelta.seconds, 3600)
+    d["minutes"], d["seconds"] = divmod(rem, 60)
+    d["milliseconds"], _ = divmod(tdelta.microseconds, 1000)
+    d["microseconds"] = tdelta.microseconds
+    return fmt.format(**d)
 
 # -----------------------------------------------------------------------------
 # MQTT Subscribe
@@ -20,12 +37,20 @@ mqttc.connect("192.168.11.52", 1883, 60)
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
-    # mqttc.subscribe("myroom/temperature")
     mqttc.subscribe("coffee-scale/measured-weight")
 
 def on_message(client, userdata, msg):
-    global current_temperature
-    current_temperature = msg.payload.decode()
+    payload = msg.payload.decode()
+    message = json.loads(payload)
+
+    global current_time
+    current_time = pd.to_timedelta(message['timedelta'])
+    
+    global current_weight
+    current_weight = message['weight']
+
+    global df_weight
+    df_weight.loc[current_time] = current_weight
 
 mqttc.on_connect = on_connect
 mqttc.on_message = on_message
@@ -38,10 +63,10 @@ mqttc.loop_start()
 app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
 
 # -----------------------------------------------------------------------------
-# Temperature card
+# weight card
 # -----------------------------------------------------------------------------
 card = dbc.Card(
-    html.H4(id="temperature")
+    html.H4(id="weight")
 )
 
 # -----------------------------------------------------------------------------
@@ -58,15 +83,16 @@ app.layout = dbc.Container(
 )
 
 # -----------------------------------------------------------------------------
-# Callback for updating temperature data
+# Callback for updating weight data
 # -----------------------------------------------------------------------------
 @app.callback(
-    Output('temperature', 'children'),
+    Output('weight', 'children'),
     Input('update', 'n_intervals')
 )
 
-def update_temperature(timer):
-    return ("Weight: " + str(current_temperature))
+def update_weight(timer):
+    time = strfdelta(current_time, "{minutes}:{seconds:0>2}.{milliseconds:0>3}")
+    return ("Time: " +  time + ", Weight: " + str(current_weight))
 
 
 # -----------------------------------------------------------------------------
