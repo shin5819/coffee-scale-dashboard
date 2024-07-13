@@ -7,10 +7,16 @@ import dash
 from dash import html, dcc, Input, Output
 import dash_bootstrap_components as dbc
 import plotly.express as px
+import plotly.graph_objects as go
 import paho.mqtt.client as mqtt
 import pandas as pd
 import json
 import datetime as dt
+from pathlib import Path
+import os
+
+global save_dir
+save_dir = Path('./data/')
 
 global current_time
 current_time = dt.timedelta(0)
@@ -18,8 +24,11 @@ current_time = dt.timedelta(0)
 global current_weight
 current_weight = 0.0
 
-global df
-df_weight = pd.DataFrame({'timedelta':[dt.timedelta(0)], 'timedelta_sec':[0.0], 'weight':[current_weight]}, index=[current_time])
+global df_weight
+df_weight = pd.DataFrame({'timedelta':[dt.timedelta(0)], 'timedelta_sec':[0.0], 'weight':[current_weight], 'type': ['live']}, index=[current_time])
+
+global df_load
+df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
 
 def strfdelta(tdelta, fmt):
     d = {"days": tdelta.days}
@@ -51,7 +60,7 @@ def on_message(client, userdata, msg):
     current_weight = message['weight']
 
     global df_weight
-    df_weight.loc[current_time] = [current_time, current_time.total_seconds(), current_weight]
+    df_weight.loc[current_time] = [current_time, current_time.total_seconds(), current_weight, 'live']
 
 mqttc.on_connect = on_connect
 mqttc.on_message = on_message
@@ -74,6 +83,13 @@ card_graph = dbc.Card(
     dcc.Graph(id="graph")
 )
 
+card_button = dbc.Card(
+    [
+        html.Button("Load", id='load_button', n_clicks=0),
+        html.Button("Save", id='save_button', n_clicks=0)
+    ]
+)
+
 # -----------------------------------------------------------------------------
 # Application layout
 # -----------------------------------------------------------------------------
@@ -84,7 +100,8 @@ app.layout = dbc.Container(
         html.H1("Coffee Scale Monitor with Plotly Dash"),
         html.Hr(),
         dbc.Row(dbc.Col(card, lg=4)),
-        dbc.Row(dbc.Col(card_graph))
+        dbc.Row(dbc.Col(card_graph)),
+        dbc.Row(dbc.Col(card_button))
     ]
 )
 
@@ -104,8 +121,33 @@ def update_weight(timer):
     Input('update', 'n_intervals')
 )
 def update_graph(timer):
-    fig = px.area(df_weight, x='timedelta_sec', y='weight')
+    # fig = px.area(df_weight, x='timedelta_sec', y='weight', line_group='type')
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df_load['timedelta_sec'], y=df_load['weight'])) 
+    fig.add_trace(go.Scatter(x=df_weight['timedelta_sec'], y=df_weight['weight'], fill='tozeroy')) 
+
     return fig
+
+@app.callback(
+    Input('load_button', 'n_clicks')
+)
+def load_graph(timer):
+    global save_dir
+    files = list(save_dir.glob('*.csv'))
+    file_updates = {file_path: os.stat(file_path).st_mtime for file_path in files}
+    newest_file = max(file_updates, key=file_updates.get)
+
+    global df_load
+    df_load = pd.read_csv(newest_file, index_col=0)
+    df_load.loc[:,'type'] = 'guide'
+
+@app.callback(
+    Input('save_button', 'n_clicks')
+)
+def save_graph(timer):
+    global savedir
+    save_filename = Path.joinpath(save_dir, dt.datetime.now().strftime('%Y%m%d-%H%M%S.csv'))
+    df_weight.to_csv(save_filename)
 
 # -----------------------------------------------------------------------------
 # Main function
