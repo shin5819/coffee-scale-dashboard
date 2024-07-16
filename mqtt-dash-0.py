@@ -1,10 +1,8 @@
-# https://gist.github.com/tolgahancepel/ccd7245530dd3a80d823b52968295080
-
 # -----------------------------------------------------------------------------
 # Importing the modules
 # -----------------------------------------------------------------------------
 import dash
-from dash import html, dcc, Input, Output
+from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
@@ -15,19 +13,11 @@ import datetime as dt
 from pathlib import Path
 import os
 
-global save_dir
+# Global variables
 save_dir = Path('./data/')
-
-global current_time
 current_time = dt.timedelta(0)
-
-global current_weight
 current_weight = 0.0
-
-global df_weight
 df_weight = pd.DataFrame({'timedelta':[dt.timedelta(0)], 'timedelta_sec':[0.0], 'weight':[current_weight], 'type': ['live']}, index=[current_time])
-
-global df_load
 df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
 
 def strfdelta(tdelta, fmt):
@@ -42,7 +32,6 @@ def strfdelta(tdelta, fmt):
 # MQTT Subscribe
 # -----------------------------------------------------------------------------
 mqttc = mqtt.Client()
-# mqttc.connect("mqtt.eclipseprojects.io", 1883, 60)
 mqttc.connect("192.168.11.52", 1883, 60)
 
 def on_connect(client, userdata, flags, rc):
@@ -84,10 +73,14 @@ card_graph = dbc.Card(
 )
 
 card_button = dbc.Card(
-    [
-        html.Button("Load", id='load_button', n_clicks=0),
-        html.Button("Save", id='save_button', n_clicks=0)
-    ]
+    html.Div(
+        [
+            dcc.Dropdown(id='file_dropdown', placeholder="Select a file", style={'width': '300px', 'color': 'black'}),
+            dbc.Button("Load", id='load_button', n_clicks=0, size="lg"),
+            dbc.Button("Save", id='save_button', n_clicks=0, size="lg", style={'margin-left': '10px'})
+        ],
+        style={'display': 'flex', 'align-items': 'center', 'gap': '10px'}
+    )
 )
 
 # -----------------------------------------------------------------------------
@@ -95,7 +88,6 @@ card_button = dbc.Card(
 # -----------------------------------------------------------------------------
 app.layout = dbc.Container(
     [
-        # dcc.Interval(id='update', n_intervals=0, interval=1000*3),
         dcc.Interval(id='update', n_intervals=0, interval=200),
         html.H1("Coffee Scale Monitor with Plotly Dash"),
         html.Hr(),
@@ -104,6 +96,19 @@ app.layout = dbc.Container(
         dbc.Row(dbc.Col(card_button))
     ]
 )
+
+# -----------------------------------------------------------------------------
+# Callback to update the dropdown options
+# -----------------------------------------------------------------------------
+@app.callback(
+    Output('file_dropdown', 'options'),
+    Input('update', 'n_intervals')
+)
+def update_dropdown(timer):
+    files = list(save_dir.glob('*.csv'))
+    files.sort(reverse=True, key=os.path.getmtime)
+    options = [{'label': file.name, 'value': str(file)} for file in files]
+    return options
 
 # -----------------------------------------------------------------------------
 # Callback for updating weight data
@@ -116,38 +121,42 @@ def update_weight(timer):
     time = strfdelta(current_time, "{minutes}:{seconds:0>2}.{milliseconds:0>3}")
     return ("Time: " +  time + ", Weight: " + str(current_weight))
 
+# -----------------------------------------------------------------------------
+# Callback for updating the graph
+# -----------------------------------------------------------------------------
 @app.callback(
     Output('graph', 'figure'),
     Input('update', 'n_intervals')
 )
 def update_graph(timer):
-    # fig = px.area(df_weight, x='timedelta_sec', y='weight', line_group='type')
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_load['timedelta_sec'], y=df_load['weight'])) 
     fig.add_trace(go.Scatter(x=df_weight['timedelta_sec'], y=df_weight['weight'], fill='tozeroy')) 
-
     return fig
 
+# -----------------------------------------------------------------------------
+# Callback for loading graph data from selected file
+# -----------------------------------------------------------------------------
 @app.callback(
-    Input('load_button', 'n_clicks')
+    Input('load_button', 'n_clicks'),
+    State('file_dropdown', 'value')
 )
-def load_graph(timer):
-    global save_dir
-    files = list(save_dir.glob('*.csv'))
-    file_updates = {file_path: os.stat(file_path).st_mtime for file_path in files}
-    newest_file = max(file_updates, key=file_updates.get)
+def load_graph(n_clicks, selected_file):
+    if selected_file is not None and n_clicks > 0:
+        global df_load
+        df_load = pd.read_csv(selected_file, index_col=0)
+        df_load.loc[:,'type'] = 'guide'
 
-    global df_load
-    df_load = pd.read_csv(newest_file, index_col=0)
-    df_load.loc[:,'type'] = 'guide'
-
+# -----------------------------------------------------------------------------
+# Callback for saving the current graph data
+# -----------------------------------------------------------------------------
 @app.callback(
     Input('save_button', 'n_clicks')
 )
-def save_graph(timer):
-    global savedir
-    save_filename = Path.joinpath(save_dir, dt.datetime.now().strftime('%Y%m%d-%H%M%S.csv'))
-    df_weight.to_csv(save_filename)
+def save_graph(n_clicks):
+    if n_clicks > 0:
+        save_filename = Path.joinpath(save_dir, dt.datetime.now().strftime('%Y%m%d-%H%M%S.csv'))
+        df_weight.to_csv(save_filename)
 
 # -----------------------------------------------------------------------------
 # Main function
