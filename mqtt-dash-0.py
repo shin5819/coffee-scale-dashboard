@@ -77,7 +77,8 @@ card_button = dbc.Card(
         [
             dcc.Dropdown(id='file_dropdown', placeholder="Select a file", style={'width': '300px', 'color': 'black'}),
             dbc.Button("Load", id='load_button', n_clicks=0, size="lg"),
-            dbc.Button("Save", id='save_button', n_clicks=0, size="lg", style={'margin-left': '10px'})
+            dbc.Button("Save", id='save_button', n_clicks=0, size="lg", style={'margin-left': '10px'}),
+            html.Div(id='save_message', style={'margin-left': '10px', 'color': 'orange', 'font-size': '20px'})
         ],
         style={'display': 'flex', 'align-items': 'center', 'gap': '10px'}
     )
@@ -151,12 +152,18 @@ def load_graph(n_clicks, selected_file):
 # Callback for saving the current graph data
 # -----------------------------------------------------------------------------
 @app.callback(
+    Output('save_message', 'children'),
     Input('save_button', 'n_clicks')
 )
 def save_graph(n_clicks):
     if n_clicks > 0:
-        save_filename = Path.joinpath(save_dir, dt.datetime.now().strftime('%Y%m%d-%H%M%S.csv'))
-        df_weight.to_csv(save_filename)
+        try:
+            save_filename = save_dir / dt.datetime.now().strftime('%Y%m%d-%H%M%S.csv')
+            df_weight.to_csv(save_filename)
+            return f"File saved successfully: {save_filename.name}"
+        except Exception as e:
+            return f"Error saving file: {str(e)}"
+    return ""
 
 # -----------------------------------------------------------------------------
 # Main function
