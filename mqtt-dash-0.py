@@ -32,7 +32,7 @@ def strfdelta(tdelta, fmt):
 # MQTT Subscribe
 # -----------------------------------------------------------------------------
 mqttc = mqtt.Client()
-mqttc.connect("192.168.11.52", 1883, 60)
+mqttc.connect("192.168.3.43", 1883, 60)
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
@@ -133,6 +133,10 @@ def update_graph(timer):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_load['timedelta_sec'], y=df_load['weight'])) 
     fig.add_trace(go.Scatter(x=df_weight['timedelta_sec'], y=df_weight['weight'], fill='tozeroy')) 
+    # y軸の表示範囲を設定
+    fig.update_layout(
+        yaxis=dict(range=[-10, None])  # 下限を0に設定し、上限は自動に設定
+    )
     return fig
 
 # -----------------------------------------------------------------------------
