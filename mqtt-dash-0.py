@@ -105,15 +105,15 @@ def on_message(client, userdata, msg):
             buffered_time = buffered_timedelta - measurement_start_time
             df_weight.loc[buffered_time] = [buffered_time, buffered_time.total_seconds(), buffered_weight, 'live']
 
-    # 50gを超えたら、フラグを立てる
-    if measurement_started and current_weight > 50:
+    # 75gを超えたら、フラグを立てる
+    if measurement_started and current_weight > 75:
         weight_threshold_exceeded = True
 
-    # 一度50gを超えた後、10gを下回ったら計測を終了（5秒間の猶予を設ける）
-    if weight_threshold_exceeded and current_weight < 10:
+    # 一度75gを超えた後、50gを下回ったら計測を終了（5秒間の猶予を設ける）
+    if weight_threshold_exceeded and current_weight < 50:
         measurement_stopped = True
         measurement_stopped_time = time.time()  # 現在の時刻を記録
-        # 10gを下回った瞬間のデータを記録
+        # 50gを下回った瞬間のデータを記録
         current_time = timedelta - measurement_start_time
         df_weight.loc[current_time] = [current_time, current_time.total_seconds(), current_weight, 'live']
         return
