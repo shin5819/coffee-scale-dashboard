@@ -140,11 +140,11 @@ card_time_weight = dbc.Card(
     dbc.CardBody([
         dbc.Row([
             dbc.Col(html.H5("Time", className="card-title"), width=4),
-            dbc.Col(html.H5(id="time_display", className="card-text"), width=8),
+            dbc.Col(html.H4(id="time_display", className="card-text"), width=8),
         ]),
         dbc.Row([
             dbc.Col(html.H5("Weight", className="card-title"), width=4),
-            dbc.Col(html.H5(id="weight_display", className="card-text"), width=8),
+            dbc.Col(html.H4(id="weight_display", className="card-text"), width=8),
         ]),
     ])
 )
@@ -230,7 +230,7 @@ app.layout = dbc.Container(
         dcc.Interval(id='update', n_intervals=0, interval=200),
         dcc.Location(id='url', refresh=True),  # ページリロード用
         dcc.Store(id='reset_triggered', data=False),  # リセットフラグ用のストアを追加
-        html.H1("Coffee Scale Monitor with Plotly Dash"),
+        html.H3("Coffee Scale Monitor"),
         html.Hr(),
         dbc.Row([
             dbc.Col(card_time_weight, style={"flex": "1", "max-width": "350px"}),
