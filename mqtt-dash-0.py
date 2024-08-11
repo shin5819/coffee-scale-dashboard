@@ -4,7 +4,6 @@
 import dash
 from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
-import plotly.express as px
 import plotly.graph_objects as go
 import paho.mqtt.client as mqtt
 import pandas as pd
@@ -19,6 +18,7 @@ from collections import deque
 save_dir = Path('./data/')
 current_time = dt.timedelta(0)
 current_weight = 0.0
+weight_offset = None  # オフセット値の初期化
 df_weight = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])  # 空のデータフレームとして初期化
 df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
 last_message_time = time.time()
@@ -50,7 +50,7 @@ def on_connect(client, userdata, flags, rc):
     mqttc.subscribe("coffee-scale/measured-weight")
 
 def on_message(client, userdata, msg):
-    global last_message_time
+    global last_message_time, weight_offset
     
     last_message_time = time.time()  # メッセージを受信した時刻を更新
     payload = msg.payload.decode()
@@ -67,6 +67,14 @@ def on_message(client, userdata, msg):
     global pre_measurement_buffer
 
     current_weight = message['weight']
+
+    # オフセットが設定されていない場合、初回の計測値をオフセットとして設定
+    if weight_offset is None:
+        weight_offset = current_weight
+
+    # オフセットを適用した計測値に更新
+    current_weight -= weight_offset
+
     timedelta = pd.to_timedelta(message['timedelta'])
 
     # 計測が完全に停止されている場合は何もしない
@@ -245,9 +253,10 @@ def reset_and_reload(n_clicks):
     if n_clicks > 0:
         # グローバル変数をリセット
         global current_time, current_weight, df_weight, df_load, measurement_started, measurement_start_time
-        global weight_threshold_exceeded, measurement_stopped, measurement_stopped_time, pre_measurement_buffer
+        global weight_threshold_exceeded, measurement_stopped, measurement_stopped_time, pre_measurement_buffer, weight_offset
         current_time = dt.timedelta(0)
         current_weight = 0.0
+        weight_offset = None  # オフセットをリセット
         df_weight = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
         df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
         measurement_started = False
