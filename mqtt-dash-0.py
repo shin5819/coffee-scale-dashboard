@@ -21,6 +21,7 @@ current_time = dt.timedelta(0)
 current_weight = 0.0
 df_weight = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])  # 空のデータフレームとして初期化
 df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
+last_message_time = time.time()
 
 measurement_started = False  # 計測が開始されたかどうかを管理するフラグ
 measurement_start_time = None  # 計測開始時点のタイムスタンプ
@@ -49,6 +50,9 @@ def on_connect(client, userdata, flags, rc):
     mqttc.subscribe("coffee-scale/measured-weight")
 
 def on_message(client, userdata, msg):
+    global last_message_time
+    
+    last_message_time = time.time()  # メッセージを受信した時刻を更新
     payload = msg.payload.decode()
     message = json.loads(payload)
 
@@ -144,6 +148,14 @@ card_status_indicators = dbc.Card(
     dbc.CardBody([
         dbc.Row([
             dbc.Col(
+                html.Div("Message Received", id="message_received_lamp", 
+                         style={"padding": "3px 8px", "border-radius": "5px", "background-color": "grey", 
+                                "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold", "margin-bottom": "12px"}),
+                width=12
+            ),
+        ]),
+        dbc.Row([
+            dbc.Col(
                 html.Div("Measurement Started", id="measurement_started_lamp", 
                          style={"padding": "3px 8px", "border-radius": "5px", "background-color": "grey", 
                                 "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold", "margin-bottom": "12px"}),
@@ -162,7 +174,7 @@ card_status_indicators = dbc.Card(
             dbc.Col(
                 html.Div("Measurement Stopped", id="measurement_stopped_lamp", 
                          style={"padding": "3px 8px", "border-radius": "5px", "background-color": "grey", 
-                                "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold", "margin-bottom": "0px"}),
+                                "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold"}),
                 width=12
             ),
         ]),
@@ -240,6 +252,7 @@ def update_weight(timer):
 # Callback for updating status lamps
 # -----------------------------------------------------------------------------
 @app.callback(
+    Output('message_received_lamp', 'style'),
     Output('measurement_started_lamp', 'style'),
     Output('threshold_exceeded_lamp', 'style'),
     Output('measurement_stopped_lamp', 'style'),
@@ -248,9 +261,14 @@ def update_weight(timer):
 def update_lamps(timer):
     base_style = {"padding": "3px 8px", "border-radius": "5px", "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold"}
     
+    message_received_style = base_style.copy()
+    message_received_style["background-color"] = "green" if time.time() - last_message_time < 1 else "grey"
+    message_received_style["box-shadow"] = "0 0 5px green" if time.time() - last_message_time < 1 else "none"
+    message_received_style["margin-bottom"] = "12px"
+
     measurement_started_style = base_style.copy()
-    measurement_started_style["background-color"] = "green" if measurement_started else "grey"
-    measurement_started_style["box-shadow"] = "0 0 5px green" if measurement_started else "none"
+    measurement_started_style["background-color"] = "blue" if measurement_started else "grey"
+    measurement_started_style["box-shadow"] = "0 0 5px blue" if measurement_started else "none"
     measurement_started_style["margin-bottom"] = "12px"
     
     threshold_exceeded_style = base_style.copy()
@@ -261,9 +279,8 @@ def update_lamps(timer):
     measurement_stopped_style = base_style.copy()
     measurement_stopped_style["background-color"] = "red" if measurement_stopped else "grey"
     measurement_stopped_style["box-shadow"] = "0 0 5px red" if measurement_stopped else "none"
-    measurement_stopped_style["margin-bottom"] = "0px"
     
-    return measurement_started_style, threshold_exceeded_style, measurement_stopped_style
+    return message_received_style, measurement_started_style, threshold_exceeded_style, measurement_stopped_style
 
 # -----------------------------------------------------------------------------
 # Callback for updating the graph
