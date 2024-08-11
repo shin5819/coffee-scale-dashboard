@@ -12,6 +12,7 @@ import json
 import datetime as dt
 from pathlib import Path
 import os
+import time
 
 # Global variables
 save_dir = Path('./data/')
@@ -19,8 +20,13 @@ current_time = dt.timedelta(0)
 current_weight = 0.0
 df_weight = pd.DataFrame({'timedelta':[dt.timedelta(0)], 'timedelta_sec':[0.0], 'weight':[current_weight], 'type': ['live']}, index=[current_time])
 df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
+
 measurement_started = False  # 計測が開始されたかどうかを管理するフラグ
 measurement_start_time = None  # 計測開始時点のタイムスタンプ
+
+weight_threshold_exceeded = False  # 50gを超えたかどうかを管理するフラグ
+measurement_stopped = False  # 計測が終了したかどうかを管理するフラグ
+measurement_stopped_time = None  # 計測が終了を判定した時点のタイムスタンプ
 
 def strfdelta(tdelta, fmt):
     d = {"days": tdelta.days}
@@ -45,18 +51,43 @@ def on_message(client, userdata, msg):
     message = json.loads(payload)
 
     global current_time
-    
     global current_weight
-    current_weight = message['weight']
-
     global df_weight
     global measurement_started
     global measurement_start_time
+    global measurement_stopped
+    global measurement_stopped_time
+    global weight_threshold_exceeded
+
+    current_weight = message['weight']
+
+    # 計測が完全に停止されている場合は何もしない
+    if measurement_stopped and (measurement_stopped_time is None or time.time() - measurement_stopped_time > 5):
+        return
+
+    # 計測終了を判定した場合でも、5秒間は計測を続ける
+    if measurement_stopped_time is not None and time.time() - measurement_stopped_time <= 5:
+        current_time = pd.to_timedelta(message['timedelta']) - measurement_start_time
+        df_weight.loc[current_time] = [current_time, current_time.total_seconds(), current_weight, 'live']
+        return
 
     # 一度0.5gを超えたら、フラグを立てて計測を開始
     if not measurement_started and current_weight > 0.5:
         measurement_started = True
         measurement_start_time = pd.to_timedelta(message['timedelta'])  # 計測開始時点のタイムスタンプを保存
+
+    # 50gを超えたら、フラグを立てる
+    if measurement_started and current_weight > 50:
+        weight_threshold_exceeded = True
+
+    # 一度50gを超えた後、10gを下回ったら計測を終了（5秒間の猶予を設ける）
+    if weight_threshold_exceeded and current_weight < 10:
+        measurement_stopped = True
+        measurement_stopped_time = time.time()  # 現在の時刻を記録
+        # 10gを下回った瞬間のデータを記録
+        current_time = pd.to_timedelta(message['timedelta']) - measurement_start_time
+        df_weight.loc[current_time] = [current_time, current_time.total_seconds(), current_weight, 'live']
+        return
 
     # フラグが立っている場合のみデータを記録
     if measurement_started:
