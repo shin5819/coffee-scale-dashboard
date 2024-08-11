@@ -179,8 +179,11 @@ def update_dropdown(timer):
     Input('update', 'n_intervals')
 )
 def update_weight(timer):
-    time = strfdelta(current_time, "{minutes}:{seconds:0>2}.{milliseconds:0>3}")
-    return ("Time: " +  time + ", Weight: " + str(current_weight))
+    minutes = int(current_time.total_seconds() // 60)  # 分
+    seconds = current_time.total_seconds() % 60  # 秒と小数点以下の部分
+    time_str = f"{minutes:02}:{seconds:04.1f}"  # mm:ss.s形式にフォーマット
+    weight_str = f"{current_weight:.1f}"
+    return f"Time: {time_str}, Weight: {weight_str}g"
 
 # -----------------------------------------------------------------------------
 # Callback for updating the graph
