@@ -122,16 +122,31 @@ mqttc.loop_start()
 app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
 
 # -----------------------------------------------------------------------------
-# weight card
+# Time & weight card
 # -----------------------------------------------------------------------------
 card = dbc.Card(
-    html.H4(id="weight")
+    dbc.CardBody([
+        dbc.Row([
+            dbc.Col(html.H5("Time", className="card-title"), width=3),
+            dbc.Col(html.H5(id="time_display", className="card-text"), width=9),
+        ]),
+        dbc.Row([
+            dbc.Col(html.H5("Weight", className="card-title"), width=3),
+            dbc.Col(html.H5(id="weight_display", className="card-text"), width=9),
+        ]),
+    ])
 )
 
+# -----------------------------------------------------------------------------
+# Graph card
+# -----------------------------------------------------------------------------
 card_graph = dbc.Card(
     dcc.Graph(id="graph")
 )
 
+# -----------------------------------------------------------------------------
+# Button card
+# -----------------------------------------------------------------------------
 card_button = dbc.Card(
     html.Div(
         [
@@ -175,15 +190,16 @@ def update_dropdown(timer):
 # Callback for updating weight data
 # -----------------------------------------------------------------------------
 @app.callback(
-    Output('weight', 'children'),
+    Output('time_display', 'children'),
+    Output('weight_display', 'children'),
     Input('update', 'n_intervals')
 )
 def update_weight(timer):
     minutes = int(current_time.total_seconds() // 60)  # 分
     seconds = current_time.total_seconds() % 60  # 秒と小数点以下の部分
     time_str = f"{minutes:02}:{seconds:04.1f}"  # mm:ss.s形式にフォーマット
-    weight_str = f"{current_weight:.1f}"
-    return f"Time: {time_str}, Weight: {weight_str}g"
+    weight_str = f"{current_weight:.1f}g"
+    return time_str, weight_str
 
 # -----------------------------------------------------------------------------
 # Callback for updating the graph
