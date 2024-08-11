@@ -122,17 +122,49 @@ mqttc.loop_start()
 app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
 
 # -----------------------------------------------------------------------------
-# Time & weight card
+# Time and Weight Display Card
 # -----------------------------------------------------------------------------
-card = dbc.Card(
+card_time_weight = dbc.Card(
     dbc.CardBody([
         dbc.Row([
-            dbc.Col(html.H5("Time", className="card-title"), width=3),
-            dbc.Col(html.H5(id="time_display", className="card-text"), width=9),
+            dbc.Col(html.H5("Time", className="card-title"), width=4),
+            dbc.Col(html.H5(id="time_display", className="card-text"), width=8),
         ]),
         dbc.Row([
-            dbc.Col(html.H5("Weight", className="card-title"), width=3),
-            dbc.Col(html.H5(id="weight_display", className="card-text"), width=9),
+            dbc.Col(html.H5("Weight", className="card-title"), width=4),
+            dbc.Col(html.H5(id="weight_display", className="card-text"), width=8),
+        ]),
+    ])
+)
+
+# -----------------------------------------------------------------------------
+# Status Indicators Card (Styled Lamps)
+# -----------------------------------------------------------------------------
+card_status_indicators = dbc.Card(
+    dbc.CardBody([
+        dbc.Row([
+            dbc.Col(
+                html.Div("Measurement Started", id="measurement_started_lamp", 
+                         style={"padding": "3px 8px", "border-radius": "5px", "background-color": "grey", 
+                                "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold", "margin-bottom": "12px"}),
+                width=12
+            ),
+        ]),
+        dbc.Row([
+            dbc.Col(
+                html.Div("Threshold Exceeded", id="threshold_exceeded_lamp", 
+                         style={"padding": "3px 8px", "border-radius": "5px", "background-color": "grey", 
+                                "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold", "margin-bottom": "12px"}),
+                width=12
+            ),
+        ]),
+        dbc.Row([
+            dbc.Col(
+                html.Div("Measurement Stopped", id="measurement_stopped_lamp", 
+                         style={"padding": "3px 8px", "border-radius": "5px", "background-color": "grey", 
+                                "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold", "margin-bottom": "0px"}),
+                width=12
+            ),
         ]),
     ])
 )
@@ -160,14 +192,17 @@ card_button = dbc.Card(
 )
 
 # -----------------------------------------------------------------------------
-# Application layout
+# Application layout with horizontally aligned cards
 # -----------------------------------------------------------------------------
 app.layout = dbc.Container(
     [
         dcc.Interval(id='update', n_intervals=0, interval=200),
         html.H1("Coffee Scale Monitor with Plotly Dash"),
         html.Hr(),
-        dbc.Row(dbc.Col(card, lg=4)),
+        dbc.Row([
+            dbc.Col(card_time_weight, style={"flex": "1", "max-width": "350px"}),
+            dbc.Col(card_status_indicators, style={"flex": "1", "max-width": "350px"})
+        ], style={"display": "flex", "justify-content": "space-between"}),
         dbc.Row(dbc.Col(card_graph)),
         dbc.Row(dbc.Col(card_button))
     ]
@@ -200,6 +235,35 @@ def update_weight(timer):
     time_str = f"{minutes:02}:{seconds:04.1f}"  # mm:ss.s形式にフォーマット
     weight_str = f"{current_weight:.1f}g"
     return time_str, weight_str
+
+# -----------------------------------------------------------------------------
+# Callback for updating status lamps
+# -----------------------------------------------------------------------------
+@app.callback(
+    Output('measurement_started_lamp', 'style'),
+    Output('threshold_exceeded_lamp', 'style'),
+    Output('measurement_stopped_lamp', 'style'),
+    Input('update', 'n_intervals')
+)
+def update_lamps(timer):
+    base_style = {"padding": "3px 8px", "border-radius": "5px", "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold"}
+    
+    measurement_started_style = base_style.copy()
+    measurement_started_style["background-color"] = "green" if measurement_started else "grey"
+    measurement_started_style["box-shadow"] = "0 0 5px green" if measurement_started else "none"
+    measurement_started_style["margin-bottom"] = "12px"
+    
+    threshold_exceeded_style = base_style.copy()
+    threshold_exceeded_style["background-color"] = "orange" if weight_threshold_exceeded else "grey"
+    threshold_exceeded_style["box-shadow"] = "0 0 5px orange" if weight_threshold_exceeded else "none"
+    threshold_exceeded_style["margin-bottom"] = "12px"
+    
+    measurement_stopped_style = base_style.copy()
+    measurement_stopped_style["background-color"] = "red" if measurement_stopped else "grey"
+    measurement_stopped_style["box-shadow"] = "0 0 5px red" if measurement_stopped else "none"
+    measurement_stopped_style["margin-bottom"] = "0px"
+    
+    return measurement_started_style, threshold_exceeded_style, measurement_stopped_style
 
 # -----------------------------------------------------------------------------
 # Callback for updating the graph
