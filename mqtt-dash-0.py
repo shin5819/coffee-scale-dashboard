@@ -194,14 +194,25 @@ card_graph = dbc.Card(
 card_button = dbc.Card(
     html.Div(
         [
-            dcc.Dropdown(id='file_dropdown', placeholder="Select a file", style={'width': '300px', 'color': 'black'}),
-            dbc.Button("Load", id='load_button', n_clicks=0, size="lg"),
-            dbc.Button("Save", id='save_button', n_clicks=0, size="lg", style={'margin-left': '10px'}),
-            html.Div(id='save_message', style={'margin-left': '10px', 'color': 'orange', 'font-size': '20px'})
+            html.Div(
+                [
+                    dcc.Dropdown(id='file_dropdown', placeholder="Select a file", style={'width': '300px', 'color': 'black'}),
+                    dbc.Button("Load", id='load_button', n_clicks=0, size="lg"),
+                    dbc.Button("Save", id='save_button', n_clicks=0, size="lg", style={'margin-left': '10px'}),
+                    html.Div(id='save_message', style={'margin-left': '10px', 'color': 'orange', 'font-size': '20px'})
+                ],
+                style={'display': 'flex', 'align-items': 'center', 'gap': '10px'}
+            ),
+            html.Div(
+                dbc.Button("Reset", id='reset_button', n_clicks=0, size="lg",
+                           style={'background-color': '#343a40', 'border-color': 'red', 'color': 'red'}),
+                style={'margin-left': 'auto', 'display': 'flex', 'justify-content': 'flex-end'}
+            ),
         ],
-        style={'display': 'flex', 'align-items': 'center', 'gap': '10px'}
+        style={'display': 'flex', 'align-items': 'center', 'justify-content': 'space-between'}
     )
 )
+
 
 # -----------------------------------------------------------------------------
 # Application layout with horizontally aligned cards
@@ -209,6 +220,8 @@ card_button = dbc.Card(
 app.layout = dbc.Container(
     [
         dcc.Interval(id='update', n_intervals=0, interval=200),
+        dcc.Location(id='url', refresh=True),  # ページリロード用
+        dcc.Store(id='reset_triggered', data=False),  # リセットフラグ用のストアを追加
         html.H1("Coffee Scale Monitor with Plotly Dash"),
         html.Hr(),
         dbc.Row([
@@ -219,6 +232,35 @@ app.layout = dbc.Container(
         dbc.Row(dbc.Col(card_button))
     ]
 )
+
+# -----------------------------------------------------------------------------
+# Callback to reset the dashboard state and reload the page
+# -----------------------------------------------------------------------------
+@app.callback(
+    Output('url', 'href'),
+    Output('reset_triggered', 'data'),
+    Input('reset_button', 'n_clicks')
+)
+def reset_and_reload(n_clicks):
+    if n_clicks > 0:
+        # グローバル変数をリセット
+        global current_time, current_weight, df_weight, df_load, measurement_started, measurement_start_time
+        global weight_threshold_exceeded, measurement_stopped, measurement_stopped_time, pre_measurement_buffer
+        current_time = dt.timedelta(0)
+        current_weight = 0.0
+        df_weight = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
+        df_load = pd.DataFrame(columns=['timedelta', 'timedelta_sec', 'weight', 'type'])
+        measurement_started = False
+        measurement_start_time = None
+        weight_threshold_exceeded = False
+        measurement_stopped = False
+        measurement_stopped_time = None
+        pre_measurement_buffer = deque(maxlen=10)
+
+        # ページのリロードを指示
+        return "/", True
+
+    return dash.no_update, dash.no_update
 
 # -----------------------------------------------------------------------------
 # Callback to update the dropdown options
@@ -239,65 +281,44 @@ def update_dropdown(timer):
 @app.callback(
     Output('time_display', 'children'),
     Output('weight_display', 'children'),
-    Input('update', 'n_intervals')
-)
-def update_weight(timer):
-    minutes = int(current_time.total_seconds() // 60)  # 分
-    seconds = current_time.total_seconds() % 60  # 秒と小数点以下の部分
-    time_str = f"{minutes:02}:{seconds:04.1f}"  # mm:ss.s形式にフォーマット
-    weight_str = f"{current_weight:.1f}g"
-    return time_str, weight_str
-
-# -----------------------------------------------------------------------------
-# Callback for updating status lamps
-# -----------------------------------------------------------------------------
-@app.callback(
+    Output('graph', 'figure'),
     Output('message_received_lamp', 'style'),
     Output('measurement_started_lamp', 'style'),
     Output('threshold_exceeded_lamp', 'style'),
     Output('measurement_stopped_lamp', 'style'),
     Input('update', 'n_intervals')
 )
-def update_lamps(timer):
+def update_dashboard(timer):
     base_style = {"padding": "3px 8px", "border-radius": "5px", "text-align": "center", "color": "white", "font-size": "12px", "font-weight": "bold"}
-    
+
+    # 通常の更新処理
+    minutes = int(current_time.total_seconds() // 60)  # 分
+    seconds = current_time.total_seconds() % 60  # 秒と小数点以下の部分
+    time_str = f"{minutes:02}:{seconds:04.1f}"  # mm:ss.s形式にフォーマット
+    weight_str = f"{current_weight:.1f}g"
+
     message_received_style = base_style.copy()
     message_received_style["background-color"] = "green" if time.time() - last_message_time < 1 else "grey"
     message_received_style["box-shadow"] = "0 0 5px green" if time.time() - last_message_time < 1 else "none"
-    message_received_style["margin-bottom"] = "12px"
 
     measurement_started_style = base_style.copy()
     measurement_started_style["background-color"] = "blue" if measurement_started else "grey"
     measurement_started_style["box-shadow"] = "0 0 5px blue" if measurement_started else "none"
-    measurement_started_style["margin-bottom"] = "12px"
-    
+
     threshold_exceeded_style = base_style.copy()
     threshold_exceeded_style["background-color"] = "orange" if weight_threshold_exceeded else "grey"
     threshold_exceeded_style["box-shadow"] = "0 0 5px orange" if weight_threshold_exceeded else "none"
-    threshold_exceeded_style["margin-bottom"] = "12px"
-    
+
     measurement_stopped_style = base_style.copy()
     measurement_stopped_style["background-color"] = "red" if measurement_stopped else "grey"
     measurement_stopped_style["box-shadow"] = "0 0 5px red" if measurement_stopped else "none"
-    
-    return message_received_style, measurement_started_style, threshold_exceeded_style, measurement_stopped_style
 
-# -----------------------------------------------------------------------------
-# Callback for updating the graph
-# -----------------------------------------------------------------------------
-@app.callback(
-    Output('graph', 'figure'),
-    Input('update', 'n_intervals')
-)
-def update_graph(timer):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_load['timedelta_sec'], y=df_load['weight'])) 
-    fig.add_trace(go.Scatter(x=df_weight['timedelta_sec'], y=df_weight['weight'], fill='tozeroy')) 
-    # y軸の表示範囲を設定
-    fig.update_layout(
-        yaxis=dict(range=[-10, None])  # 下限を0に設定し、上限は自動に設定
-    )
-    return fig
+    fig.add_trace(go.Scatter(x=df_weight['timedelta_sec'], y=df_weight['weight'], fill='tozeroy'))
+    fig.update_layout(yaxis=dict(range=[-10, None]))
+
+    return time_str, weight_str, fig, message_received_style, measurement_started_style, threshold_exceeded_style, measurement_stopped_style
 
 # -----------------------------------------------------------------------------
 # Callback for loading graph data from selected file
